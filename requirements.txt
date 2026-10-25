@@ -1,0 +1,27 @@
+# Dependencias Python de Vimo, verificadas en Raspberry Pi 5 / Debian 13 (trixie) / aarch64 / Python 3.13.5.
+# Se instalan en el entorno virtual `venv/` (creado con --system-site-packages para usar
+# Picamera2, libcamera, Tkinter, Pillow/ImageTk y NumPy de APT). Usa ./setup.sh en lugar de
+# instalar a mano.
+
+# Wake word: livekit-wakeword (el sistema con el que se entrenó el modelo). Para inferencia solo
+# necesita numpy y onnxruntime; los extras [train]/[export] (torch…) son para entrenar y no se instalan.
+livekit-wakeword==0.3.0
+onnxruntime==1.31.0
+# Remuestreo polifásico del micrófono (app/audio_manager.py)
+scipy==1.18.1
+
+# Audio (PortAudio: apt install libportaudio2)
+sounddevice==0.5.6
+
+# Síntesis de voz: Piper (OHF-Voice/piper1-gpl)
+piper-tts==1.8.0
+pathvalidate==3.3.1
+
+# Búsqueda web (DuckDuckGo) y servidor MCP para Claude Code
+ddgs==9.16.0
+mcp==2.3.0
+
+# Música (YouTube). La versión de APT (2025.04.30) es antigua y YouTube la rompe: se instala la
+# actual en el venv. El extra [default] incluye yt-dlp-ejs (retos JavaScript de YouTube, con Node).
+# Actualizar cuando YouTube cambie algo:  venv/bin/pip install -U "yt-dlp[default]"
+yt-dlp[default]>=2026.10.21

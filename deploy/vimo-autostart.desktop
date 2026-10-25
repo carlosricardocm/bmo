@@ -1,0 +1,12 @@
+[Desktop Entry]
+# Autoarranque de Vimo al iniciar la sesión gráfica (labwc lee ~/.config/autostart/).
+# Instalar:  cp deploy/vimo-autostart.desktop ~/.config/autostart/vimo.desktop
+# Ajusta la ruta de Exec si el proyecto no está en /home/bmo/bmoclaude.
+Type=Application
+Name=Vimo
+Comment=Agente conversacional Vimo
+Exec=/home/bmo/bmoclaude/start_agent.sh
+Path=/home/bmo/bmoclaude
+Icon=/home/bmo/bmoclaude/deploy/vimo-icon.png
+Terminal=false
+X-GNOME-Autostart-Delay=5

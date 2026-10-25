@@ -1,0 +1,25 @@
+# Alternativa con systemd --user (la opción recomendada es deploy/vimo-autostart.desktop).
+#
+# En Raspberry Pi OS con labwc, graphical-session.target no se activa y los servicios de
+# usuario NO reciben WAYLAND_DISPLAY/DISPLAY. Para usar este servicio hay que exportar el
+# entorno de la sesión gráfica al gestor de usuario, p. ej. añadiendo a ~/.config/labwc/autostart:
+#     systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_RUNTIME_DIR && systemctl --user start vimo
+# Instalar:
+#     mkdir -p ~/.config/systemd/user && cp deploy/vimo.service ~/.config/systemd/user/
+#     systemctl --user daemon-reload
+# El servicio usa la sesión y credenciales de Claude Code del propio usuario (~/.claude).
+[Unit]
+Description=Vimo, agente conversacional
+After=pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/bmoclaude
+ExecStart=%h/bmoclaude/start_agent.sh
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

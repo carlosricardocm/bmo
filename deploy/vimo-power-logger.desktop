@@ -1,0 +1,8 @@
+[Desktop Entry]
+# Registrador de alimentación al iniciar la sesión (diagnóstico de reinicios por cortes de energía).
+# Instalar: cp deploy/vimo-power-logger.desktop ~/.config/autostart/   · Quitar: rm ~/.config/autostart/vimo-power-logger.desktop
+Type=Application
+Name=Vimo: registrador de alimentación
+Exec=/usr/bin/python3 /home/bmo/bmoclaude/tools/power_logger.py --interval 1
+Terminal=false
+NoDisplay=true

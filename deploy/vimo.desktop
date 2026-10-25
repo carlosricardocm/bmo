@@ -1,0 +1,16 @@
+[Desktop Entry]
+# Lanzador de Vimo para el escritorio o el menú.
+#   Escritorio: cp deploy/vimo.desktop ~/Desktop/Vimo.desktop && chmod +x ~/Desktop/Vimo.desktop
+#   Menú:       cp deploy/vimo.desktop ~/.local/share/applications/
+# Ajusta las rutas si el proyecto no está en /home/bmo/bmoclaude.
+Type=Application
+Version=1.0
+Name=Vimo
+GenericName=Asistente de voz
+Comment=Agente conversacional Vimo
+Exec=/home/bmo/bmoclaude/start_agent.sh
+Path=/home/bmo/bmoclaude
+Icon=/home/bmo/bmoclaude/deploy/vimo-icon.png
+Terminal=false
+StartupNotify=true
+Categories=Utility;

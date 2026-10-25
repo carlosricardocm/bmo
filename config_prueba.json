@@ -1,0 +1,8 @@
+{
+  "_comentario": "Perfil de prueba de baja carga: sin voz (Piper), sin efectos de sonido y Whisper sin precargar. Uso: ./start_agent.sh --windowed --config config_prueba.json",
+  "sounds": {"enabled": false},
+  "tts": {"enabled": false},
+  "stt": {"use_server": false},
+  "gui": {"fullscreen": false},
+  "memory": {"path": "data/memoria_prueba.json"}
+}
