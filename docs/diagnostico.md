@@ -68,6 +68,9 @@ y la Pi (tornillos/pines), no de la placa. Si vuelve a caer la tensión, revisar
 CPU quedaba a ~70 °C casi en reposo (ventilador a 7.800 rpm) y pasaba de 82–85 °C tras unos
 minutos de Whisper. Se dejó `arm_freq=2000` en `/boot/firmware/config.txt`. La alimentación no era
 el problema (5 V ≥ 5,02 V en todas las pruebas, incluso con un cargador de 5 V/2 A).
+El 28-10-2026 se volvió a **2,4 GHz** a petición del usuario (transcripción más rápida). No hay
+riesgo de apagado por calor: a 80–85 °C la propia Pi baja la frecuencia. En uso continuo largo
+puede ir algo más lenta por eso; para volver a 2,0 GHz, descomentar `arm_freq=2000`.
 
 Qué hacer:
 
