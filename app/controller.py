@@ -252,7 +252,8 @@ class VimoController:
         s = self.config.section("stt")
         stt = WhisperTranscriber(os.path.expanduser(s["whisper_dir"]), s["server_binary"], s["cli_binary"],
                                  s["model"], s["language"], s["threads"], s["use_server"], s["server_port"],
-                                 s["timeout_seconds"], resolve_path("logs"), s["audio_ctx"])
+                                 s["timeout_seconds"], resolve_path("logs"), s["audio_ctx"],
+                                 s["prompt"])
         stt.start()
         self.stt = stt
         mode = "servidor" if stt._server else "CLI"

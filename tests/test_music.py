@@ -224,10 +224,23 @@ class MusicIntentTest(unittest.TestCase):
             "sube el volumen al máximo": ("volume_set", "100"), "baja el volumen al mínimo": ("volume_set", "10"),
             "Sube un poquito el volumen": ("volume_up", None), "baja un poco el volumen": ("volume_down", None),
             "Supervolumen": ("volume_up", None), "sube más el volumen": ("volume_up", None),
+            # Números con letras («al noventa»): Whisper no siempre escribe cifras.
+            "Pon el volumen al noventa.": ("volume_set", "90"),
+            "sube el volumen al setenta y cinco por ciento": ("volume_set", "75"),
+            # Evaluación con tu voz (28-10-2026)
+            "Baca volúmer.": ("volume_down", None), "Pon el volume al 90;": ("volume_set", "90"),
+            "poner volumen al 90": ("volume_set", "90"),
         }
         for text, (name, arg) in cases.items():
             self.assertEqual(intents.parse(text), intents.Intent(name, arg), text)
         self.assertEqual(intents.parse("pon 50 cent"), intents.Intent(intents.MUSIC_PLAY, "50 cent"))
+        self.assertEqual(intents.parse("pon cincuenta sombras"), intents.Intent(intents.MUSIC_PLAY, "cincuenta sombras"))
+        self.assertEqual(intents.detect("Tomó una foto."), intents.PHOTO)
+        self.assertEqual(intents.detect("Grabó un vídeo."), intents.RECORD_START)
+        self.assertEqual(intents.parse("por música de Soda Stereo"), intents.Intent(intents.MUSIC_PLAY, "soda stereo"))
+        for text in ("como una foto de mi perro se ve bien", "grabo canciones en mi casa",
+                     "Tomé una foto ayer en la playa", "por la música me gusta bailar"):
+            self.assertIsNone(intents.parse(text), text)
         for text in ("¿Qué es el volumen de un cubo?", "baja la persiana", "sube la foto a internet"):
             self.assertIsNone(intents.parse(text), text)
 

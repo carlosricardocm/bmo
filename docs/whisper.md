@@ -82,3 +82,22 @@ estable, 4 hilos y `-ac 768` deberían bajar a ~5–6 s por frase.
 
 El banco de pruebas está en `~/bmoclaude_backups/stt_bench/stt_bench.py` (con un vigilante que
 detiene Whisper si sube la temperatura o la corriente, o si baja la tensión).
+
+## Vocabulario (`stt.prompt`) y evaluación con tu voz (28-10-2026)
+
+`tools/grabar_frases_stt.py` graba 33 frases reales (luces, música, volumen, cámara y preguntas)
+por el mismo camino de audio que Vimo; `tools/evaluar_whisper.py` las transcribe con varias
+configuraciones y mide si Vimo haría lo correcto con cada transcripción. Resultados (Pi 5 a 2,0 GHz;
+tiempos estimados con 4 hilos):
+
+| Configuración | Órdenes bien | WER | Tiempo |
+|---|---|---|---|
+| small (antes) | 19/33 | 36 % | ~4,9 s |
+| **small + vocabulario (actual)** | 22/33 → 31/33 con las variantes añadidas | **24 %** | ~5,8 s |
+| small + búsqueda en haz (`beam_size 5`) | 19/33 | 35 % | ~5,2 s |
+| medium + vocabulario | 29/33 | 12 % | ~16,6 s (demasiado lento) |
+
+El fallo típico era la primera palabra («pon» → «hola», «con», «pondra»). El vocabulario se envía
+en cada petición a whisper-server (`stt.prompt`; vacío lo desactiva). Las transcripciones erróneas
+que siguen apareciendo se aceptan como variantes en `app/intents.py` y `app/smart_lights.py`.
+Para repetir la evaluación: cierra Vimo y ejecuta `venv/bin/python tools/evaluar_whisper.py --hilos 2`.

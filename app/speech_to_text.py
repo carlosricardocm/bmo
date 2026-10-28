@@ -262,7 +262,7 @@ def wav_bytes(audio: np.ndarray, rate: int = TARGET_RATE) -> bytes:
 class WhisperTranscriber:
     def __init__(self, whisper_dir: str, server_binary: str, cli_binary: str, model: str,
                  language: str = "es", threads: int = 4, use_server: bool = True, port: int = 8178,
-                 timeout: float = 60.0, log_dir: str | None = None, audio_ctx: int = 0):
+                 timeout: float = 60.0, log_dir: str | None = None, audio_ctx: int = 0, prompt: str = ""):
         self.whisper_dir = whisper_dir
         self.server_bin = self._abs(server_binary)
         self.cli_bin = self._abs(cli_binary)
@@ -277,6 +277,8 @@ class WhisperTranscriber:
         # máximo listening.max_seconds (12 s), así que 768 (~15 s) basta y el codificador tarda menos
         # de la mitad, con el mismo texto (medido en esta Raspberry Pi el 25-10-2026). 0 = completo.
         self.audio_ctx = int(audio_ctx or 0)
+        # Vocabulario previo (stt.prompt): orienta a Whisper hacia las órdenes de Vimo.
+        self.prompt = prompt or ""
         self._server: subprocess.Popen | None = None
         self._server_log = None
         self._lock = threading.Lock()
@@ -393,6 +395,8 @@ class WhisperTranscriber:
     def _via_server(self, wav: bytes) -> str:
         boundary = uuid.uuid4().hex
         fields = {"response_format": "json", "temperature": "0.0", "language": self.language}
+        if self.prompt:
+            fields["prompt"] = self.prompt
         body = io.BytesIO()
         for k, v in fields.items():
             body.write(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())
@@ -416,6 +420,8 @@ class WhisperTranscriber:
             with os.fdopen(fd, "wb") as fh:
                 fh.write(wav_bytes(audio, rate))
             cmd = [self.cli_bin] + self._common_args() + ["-nt", "-np", "-f", path]
+            if self.prompt:
+                cmd += ["--prompt", self.prompt]
             try:
                 proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout)
             except subprocess.TimeoutExpired as exc:

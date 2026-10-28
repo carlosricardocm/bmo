@@ -22,7 +22,7 @@ import threading
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
-from .intents import _PREFIX, normalize
+from .intents import _PREFIX, normalize, words_to_digits
 
 log = logging.getLogger(__name__)
 
@@ -77,16 +77,26 @@ _COLOUR_WORDS = {
 _LIGHT = r"(?:luz|luces|lampara|lamparas|lamparita|lamparitas|foco|focos)"
 _ART = r"(?:(?:la|las|el|los|mi|mis|esa|esas)\s+)?(?:(?:dos|ambas|ambos)\s+)?"
 _VERB_ON = {"prende", "prendeme", "prender", "prendan", "enciende", "enciendeme", "encender", "activa", "activar",
-            "aprende", "prenda", "prendo", "prendes", "enciendo", "enciendes"}
-_VERB_OFF = {"apaga", "apagame", "apagar", "apaguen", "desactiva", "desactivar", "apague", "apagas", "apago"}
-_VERB_UP = {"sube", "subele", "subir", "aumenta", "aumentale"}
+            "aprende", "prenda", "prendo", "prendes", "enciendo", "enciendes", "prendela", "prendelas",
+            "enciendela", "enciendelas"}
+_VERB_OFF = {"apaga", "apagame", "apagar", "apaguen", "desactiva", "desactivar", "apague", "apagas", "apago",
+             "apagala", "apagalas", "para"}  # «¡Para la luz!» (evaluación con tu voz, 28-10-2026)
+_VERB_UP = {"sube", "subele", "subir", "aumenta", "aumentale", "sobe", "sobre"}  # «Sobe/Sobre la luz»
 _VERB_DOWN = {"baja", "bajale", "bajar", "disminuye", "reduce", "bajame"}
 _VERB_SET = {"pon", "ponme", "ponle", "poner", "ponla", "ponlas", "cambia", "cambiale", "cambiar", "deja", "dejame",
              "ajusta", "configura",
              # Whisper oye a veces «por la luz roja» (log del 25-10-2026), «pom», «bon»…
-             "por", "pom", "bon", "pone", "polo", "pola"}
+             "por", "pom", "bon", "pone", "polo", "pola",
+             "buena", "buenas", "bona",  # «Buena luz, calidad.» = «pon la luz cálida» (27-10-2026)
+             # Evaluación con tu voz (28-10-2026): «Hola, luz fría», «con la luz al 50%», «o la luz
+             # fría», «Pondra luz blanca».
+             "hola", "con", "o", "pondra", "pondran"}
+# Verbos que son también palabras corrientes («para la luz de la luna», «sobre la luz del sol»):
+# solo cuentan si no sobra nada más en la frase.
+_VERB_STRICT = {"para", "sobre"}
 _VERBS = _VERB_ON | _VERB_OFF | _VERB_UP | _VERB_DOWN | _VERB_SET
 _HEAD = re.compile(_PREFIX + r"(?:(?P<verb>" + "|".join(sorted(_VERBS, key=len, reverse=True)) + r")\b\s*)?(?P<rest>.*)$")
+_MODE_WORD = re.compile(r"\b(modos|bolo|bolos|bodo|molo|mono|moto|nodo|lodo|godo|mood)\s+(.+)$")
 _END = re.compile(r"(?:\s+(?:por favor|porfa|vimo|bimo|gracias))+$")
 # Palabras que pueden acompañar a una orden de luces sin cambiar su sentido.
 _FILLER = {"la", "las", "el", "los", "de", "del", "en", "a", "al", "mi", "mis", "lado", "cuarto", "habitacion",
@@ -151,6 +161,13 @@ class LightParser:
             found = []
         return found, re.sub(r"\s+", " ", text).strip()
 
+    def _fix_mode_word(self, norm: str) -> str:
+        """Whisper oye «modo» como «bolo», «mono», «moto»… (log del 27-10-2026: «¡Bolo Fiesta!»).
+        Solo se corrige si detrás viene un modo conocido, para no tocar otras frases."""
+        def fix(m: re.Match) -> str:
+            return "modo " + m.group(2) if self.match_mode(m.group(2)) else m.group(0)
+        return _MODE_WORD.sub(fix, norm)
+
     def match_mode(self, said: str) -> str | None:
         said = re.sub(r"^(?:de\s+|del\s+|para\s+)?(?:la\s+|el\s+)?", "", said.strip())
         if said in self.modes:
@@ -166,7 +183,8 @@ class LightParser:
         return best
 
     def parse(self, text: str) -> LightCommand | None:
-        norm = _END.sub("", normalize(text))
+        norm = _END.sub("", words_to_digits(normalize(text)))
+        norm = self._fix_mode_word(norm)
         m = _HEAD.match(norm)
         if not m:
             return None
@@ -197,6 +215,8 @@ class LightParser:
         if mode_s:
             said = mode_s.group("mode").strip()
             return LightCommand(MODE, targets, self.match_mode(said), raw_mode=said)
+        if verb in _VERB_STRICT and [w for w in _words(tail) if w not in _FILLER]:
+            return None
         if verb in _VERB_OFF:
             return LightCommand(OFF, targets)
 
@@ -210,7 +230,7 @@ class LightParser:
             if word in _COLOUR_WORDS:
                 return LightCommand(COLOUR, targets, _COLOUR_WORDS[word])
         # «calidad»: así transcribe Whisper «cálida» (log del 25-10-2026).
-        if re.search(r"\b(?:calida|calido|calidas|calidos|calidita|calidad|amarillenta|tibia)\b", tail):
+        if re.search(r"\b(?:calida|calido|calidas|calidos|calidita|calidad|caridad|amarillenta|tibia)\b", tail):
             return LightCommand(TEMP, targets, 0)
         if re.search(r"\b(?:fria|frio|fresca)\b", tail):
             return LightCommand(TEMP, targets, 100)

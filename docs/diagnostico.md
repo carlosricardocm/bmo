@@ -42,6 +42,33 @@ Por eso Vimo usa ahora `stt.threads = 2` (con `stt.audio_ctx = 768` es más ráp
 `config.txt` tiene `usb_max_current_enable=1` (forzar corriente USB sin fuente de 5 A): con una
 fuente más débil eso deja menos margen.
 
+**Fuente de 5 V / 5 A a través de la X120x (27-10-2026).** Con la fuente nueva conectada al USB-C
+de la X120x, la misma prueba (Whisper, 4 hilos, `-ac 768`) bajó la entrada de 5 V a **4,77 V** con
+solo 5,35 A en el núcleo (el vigilante la cortó; en reposo 5,07 V). La caída es peor que con la
+fuente anterior: la SAI averiada y sus contactos limitan, no la fuente. Hay que conectar la fuente
+directamente al USB-C de la Raspberry Pi antes de volver a 4 hilos y 2,4 GHz.
+
+**Fuente de 5 V / 5 A directa a la Pi + celda en la X120x (27-10-2026).** Con la fuente en el
+USB-C de la Raspberry Pi: reposo 5,13–5,15 V; Whisper con 4 hilos → pico de 6,84 A en el núcleo,
+5 V mínimo **5,09 V**, 69,7 °C, sin *throttling*. Se volvió a `stt.threads = 4`, yt-dlp en los 4
+núcleos y se quitó `arm_freq=1800` (2,4 GHz). Ojo: así la X120x **no carga la celda** (solo carga
+desde su propio USB-C); la batería quedó al 31 % («Discharging»).
+Tras reiniciar a **2,4 GHz**: Whisper (4 hilos) 4,5 s por consulta; 22 transcripciones seguidas
+(~100 s de carga continua) → pico de 9,0 A en el núcleo, 5 V mínimo 5,08 V, **78,5 °C**, sin
+*throttling*. En uso normal la carga es a ráfagas y se queda bastante por debajo.
+
+**X120x reasentada, con celda y la fuente en su USB-C (27-10-2026, 21:45).** Tras volver a montar
+bien la X120x sobre la Pi, su chip responde, detecta la red (`x120x-ac online=1`) y **carga la
+celda**. Reposo 5,14–5,18 V. A 2,4 GHz: Whisper 4 hilos sostenido → 8,6 A, 5 V ≥ 5,01 V, 68,6 °C;
+Whisper + Piper a la vez → 9,0 A, 5 V ≥ 5,006 V, 74,7 °C; sin *throttling*. Antes del reasiento la
+misma configuración caía a 4,81 V incluso con 2 hilos: el fallo era de **contacto** entre la X120x
+y la Pi (tornillos/pines), no de la placa. Si vuelve a caer la tensión, revisar ese contacto.
+
+**CPU a 2,0 GHz por temperatura (27-10-2026).** Con la caja en su configuración final, a 2,4 GHz la
+CPU quedaba a ~70 °C casi en reposo (ventilador a 7.800 rpm) y pasaba de 82–85 °C tras unos
+minutos de Whisper. Se dejó `arm_freq=2000` en `/boot/firmware/config.txt`. La alimentación no era
+el problema (5 V ≥ 5,02 V en todas las pruebas, incluso con un cargador de 5 V/2 A).
+
 Qué hacer:
 
 1. **Fuente de 5 V / 5 A (27 W)**, la oficial de la Pi 5 o la que recomiende Suptronics para la

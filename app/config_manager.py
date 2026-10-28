@@ -98,11 +98,18 @@ DEFAULTS: dict[str, Any] = {
         "cli_binary": "build/bin/whisper-cli",
         "model": "models/ggml-small-q5_1.bin",
         "language": "es",
-        # 2 hilos: con 4, la Raspberry Pi se apagó dos veces el 25-10-2026 (pico de consumo; ver
-        # docs/whisper.md). Con audio_ctx 768, 2 hilos tardan menos que 4 sin él.
-        "threads": 2,
+        # 4 hilos (~5,9 s por consulta, 2 hilos ~10,5 s). Con 4 la Pi se apagó el 25-10-2026 con la
+        # fuente anterior; con la de 5 V/5 A directa a la Pi aguanta (docs/diagnostico.md). Si vuelve
+        # a apagarse, baja a 2.
+        "threads": 4,
         # Contexto de audio (-ac): 768 ≈ 15 s, suficiente para listening.max_seconds. 0 = 30 s completos.
         "audio_ctx": 768,
+        # Vocabulario que se le da a Whisper antes de cada consulta. Con tus frases grabadas
+        # (tools/evaluar_whisper.py, 28-10-2026) bajó el error de palabras del 36 % al 24 % por ~0,9 s
+        # más. Vacío = sin vocabulario.
+        "prompt": ("Órdenes para Vimo: prende, apaga, pon la luz cálida, fría, blanca, roja, azul; lámpara "
+                   "izquierda y derecha; brillo; modo fiesta, lectura, noche, relax; reproduce, pon música de, "
+                   "pausa, para la música, siguiente canción; sube y baja el volumen; toma una foto."),
         "use_server": True,
         "server_port": 8178,
         "timeout_seconds": 60.0,
@@ -196,8 +203,8 @@ DEFAULTS: dict[str, Any] = {
         "duck_ratio": 0.3,
         "duck_seconds": 3.0,
         "download_timeout_seconds": 90,
-        # Núcleos y prioridad para yt-dlp (descargas): limitar evita sumar picos de consumo.
-        "ytdlp_cpu_cores": [3],
+        # Núcleos y prioridad para yt-dlp (descargas). Con una fuente débil, [3] evita sumar picos.
+        "ytdlp_cpu_cores": [0, 1, 2, 3],
         "ytdlp_nice": 10,
     },
     "lights": {

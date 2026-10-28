@@ -44,12 +44,41 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+# Porcentajes dichos con palabras («al cincuenta por ciento», «al noventa»): Whisper no siempre
+# escribe cifras. Solo se convierten tras «al / a / en / hasta», para no tocar títulos de canciones.
+_UNITS = {"uno": 1, "un": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7,
+          "ocho": 8, "nueve": 9}
+_TEENS = {"diez": 10, "once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15, "dieciseis": 16,
+          "diecisiete": 17, "dieciocho": 18, "diecinueve": 19, "veinte": 20, "cien": 100, "ciento": 100}
+_TENS = {"veinti": 20, "treinta": 30, "cuarenta": 40, "cincuenta": 50, "sesenta": 60, "setenta": 70,
+         "ochenta": 80, "noventa": 90}
+_UNIT_RX = "|".join(_UNITS)
+_NUMWORD = re.compile(r"\b(al|a|en|hasta)\s+(?:veinti(" + _UNIT_RX + r")|(" + "|".join(t for t in _TENS if t != "veinti") +
+                      r")(?:\s+y\s+(" + _UNIT_RX + r"))?|(" + "|".join(_TEENS) + r"))\b")
+
+
+def _num(m: re.Match) -> str:
+    if m.group(2):
+        value = 20 + _UNITS[m.group(2)]
+    elif m.group(3):
+        value = _TENS[m.group(3)] + (_UNITS[m.group(4)] if m.group(4) else 0)
+    else:
+        value = _TEENS[m.group(5)]
+    return f"{m.group(1)} {value}"
+
+
+def words_to_digits(norm: str) -> str:
+    """«pon la luz al cincuenta por ciento» → «pon la luz al 50 por ciento» (texto ya normalizado)."""
+    return _NUMWORD.sub(_num, norm)
+
+
 _PREFIX = (r"^(?:(?:oye|hey|ey|vimo|bimo|por favor|porfa|ahora|ya|bueno|vale|ok|okay)\s+)*"
            r"(?:(?:puedes|podrias|quiero que|necesito que|me puedes|me podrias)\s+)?(?:me\s+)?")
 _END = r"(?:\s+(?:por favor|porfa|vimo|bimo|gracias))*$"
 _MUSIC = r"(?:la\s+)?(?:musica|cancion|canciones|rola|tema|reproduccion)"
-_VOL = r"(?:volumen|bolumen|sonido)"
-_VERB_SET = r"pon|ponle|sube|subele|super|supe|baja|bajale|ajusta|deja"
+# «volume», «volúmer»: evaluación con tu voz (28-10-2026).
+_VOL = r"(?:volumen|bolumen|volume|volumer|sonido)"
+_VERB_SET = r"pon|ponle|poner|sube|subele|super|supe|baja|bajale|ajusta|deja"
 _EXTREME = r"(?:el\s+)?(?:maximo|tope|minimo)"
 _PERCENT = r"(?:\s+(?:por\s+ciento|porciento))?"
 _AMOUNT = r"(?:(?:un\s+poco|un\s+poquito|mas)\s+)?"
@@ -64,6 +93,10 @@ _PATTERNS: list[tuple[str, str]] = [
                              r"(?:a\s+grabar|a\s+filmar|(?:la|una)\s+grabacion|(?:un|el)\s+video)\b"),
     (PHOTO, _PREFIX + r"(?:toma|tomar|tomame|saca|sacar|sacame|haz|hacer|hazme|captura|capturar)\s+"
                       r"(?:me\s+)?(?:una\s+|otra\s+)?(?:foto|fotografia|fotito|imagen|captura)\b"),
+    # Whisper oye «Tomó / como una foto» y «Grabó un vídeo» (evaluación con tu voz, 28-10-2026). Son
+    # también frases corrientes, así que solo cuentan si no hay nada más.
+    (PHOTO, _PREFIX + r"(?:tomo|tome|como)\s+(?:una\s+|otra\s+)?(?:foto|fotografia)" + _END),
+    (RECORD_START, _PREFIX + r"(?:grabo|grabe)\s+(?:un|una)\s+(?:video|clip)" + _END),
     (RESET, _PREFIX + r"(?:(?:empecemos|empezar|comencemos|iniciar|inicia|empieza)\s+(?:una\s+)?"
                       r"(?:nueva\s+conversacion|de\s+nuevo|de\s+cero)"
                       r"|nueva\s+conversacion"
@@ -95,7 +128,7 @@ _PATTERNS: list[tuple[str, str]] = [
     (VOLUME_UP, _PREFIX + r"(?:(?:sube|subele|subir|aumenta|aumentale|super|supe|mas)\s*" + _AMOUNT +
                           r"(?:el\s*|al\s*|la\s*)?(?:" + _VOL + r"|musica)" + _AMOUNT_END +
                           r"|(?:subele|mas\s+alto|mas\s+fuerte)" + _AMOUNT_END + r"|sube(?:le)?\s+un\s+po(?:co|quito))" + _END),
-    (VOLUME_DOWN, _PREFIX + r"(?:(?:baja|bajale|bajar|disminuye|reduce|menos)\s*" + _AMOUNT +
+    (VOLUME_DOWN, _PREFIX + r"(?:(?:baja|bajale|bajar|disminuye|reduce|menos|baca|vaca)\s*" + _AMOUNT +
                             r"(?:el\s*|al\s*|la\s*)?(?:" + _VOL + r"|musica)" + _AMOUNT_END +
                             r"|(?:bajale|mas\s+bajo|mas\s+despacio|mas\s+quedito)" + _AMOUNT_END +
                             r"|baja(?:le)?\s+un\s+po(?:co|quito))" + _END),
@@ -105,7 +138,9 @@ _PATTERNS: list[tuple[str, str]] = [
     # «produce» / «le produce»: Whisper a veces oye así «reproduce» (log del 25-10-2026).
     (MUSIC_PLAY, _PREFIX + r"(?:pon|ponme|ponnos|poner|ponerme|reproduce|reproduceme|reproducir|(?:le\s+)?produce|"
                            r"toca|tocame|tocar|"
-                           r"quiero\s+(?:escuchar|oir)|escuchemos|pongamos)\s+(?P<arg>.+)$"),
+                           r"quiero\s+(?:escuchar|oir)|escuchemos|pongamos|"
+                           # «por / o la música de Soda Stereo» (evaluación con tu voz, 28-10-2026)
+                           r"(?:por|o)(?=\s+(?:la\s+)?musica\s+de\s))\s+(?P<arg>.+)$"),
     (MUSIC_PLAY, _PREFIX + r"(?:pon|ponme|reproduce|toca)(?P<arg>)" + _END),
 ]
 _COMPILED = [(name, re.compile(p)) for name, p in _PATTERNS]
@@ -172,7 +207,7 @@ def clean_query(raw: str) -> str:
 
 
 def parse(text: str) -> Intent | None:
-    norm = normalize(text)
+    norm = words_to_digits(normalize(text))
     if not norm:
         return None
     for name, rx in _COMPILED:

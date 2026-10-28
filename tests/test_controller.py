@@ -208,6 +208,23 @@ class ControllerFlowTest(unittest.TestCase):
         self.assertEqual(w._common_args()[-4:], ["-t", "2", "-ac", "768"])
         self.assertNotIn("-ac", WhisperTranscriber("/w", "s", "c", "m.bin")._common_args())
 
+    def test_whisper_request_sends_prompt(self):
+        import json as _json
+        from unittest import mock
+        from app.speech_to_text import WhisperTranscriber
+        sent = {}
+
+        def fake_urlopen(req, timeout=None):
+            sent["body"] = req.data
+            resp = mock.MagicMock()
+            resp.__enter__.return_value.read.return_value = _json.dumps({"text": "pon la luz cálida"}).encode()
+            return resp
+        w = WhisperTranscriber("/w", "s", "c", "m.bin", prompt="Órdenes para Vimo: modo fiesta.")
+        with mock.patch("urllib.request.urlopen", fake_urlopen):
+            self.assertEqual(w._via_server(b"RIFF"), "pon la luz cálida")
+        self.assertIn("Órdenes para Vimo: modo fiesta.".encode(), sent["body"])
+        self.assertIn(b'name="prompt"', sent["body"])
+
     def test_aec_without_visible_devices_falls_back(self):
         from unittest import mock
         import app.controller as ctl

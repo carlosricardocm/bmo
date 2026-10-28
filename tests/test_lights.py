@@ -107,6 +107,8 @@ class LightsTest(unittest.TestCase):
             "apaga las dos lámparas": (sl.OFF, [], None),
             "pon la luz al 50%": (sl.BRIGHTNESS, [], 50),
             "brillo al máximo": (sl.BRIGHTNESS, [], 100),
+            "Pon la luz al cincuenta por ciento.": (sl.BRIGHTNESS, [], 50),
+            "pon la luz al veinticinco": (sl.BRIGHTNESS, [], 25),
             "sube la luz": (sl.BRIGHTER, [], None),
             "menos luz": (sl.DIMMER, [], None),
             "pon la luz roja": (sl.COLOUR, [], "rojo"),
@@ -117,9 +119,21 @@ class LightsTest(unittest.TestCase):
             "luz cálida": (sl.TEMP, [], 0),
             "Pon la luz calidad.": (sl.TEMP, [], 0),          # Whisper, log del 25-10-2026
             "¡Polo luz calidad!": (sl.TEMP, [], 0),
+            "Buena luz, calidad.": (sl.TEMP, [], 0),          # Whisper, log del 27-10-2026
+            # Transcripciones de la evaluación con tu voz (28-10-2026)
+            "¡Para la luz!": (sl.OFF, [], None),
+            "Sobe la luz.": (sl.BRIGHTER, [], None),
+            "Sobre la luz": (sl.BRIGHTER, [], None),
+            "Hola, luz fría.": (sl.TEMP, [], 100),
+            "¡Hola, luz caridad!": (sl.TEMP, [], 0),
+            "con la luz al 50%": (sl.BRIGHTNESS, [], 50),
+            "Pondrán luz blanca.": (sl.WHITE, [], None),
+            "prendela de la izquierda": (sl.ON, ["lampara_cuarto_izq"], None),
             "pon la luz blanca": (sl.WHITE, [], None),
             "modo lectura": (sl.MODE, [], "lectura"),
             "pon el modo fiesta": (sl.MODE, [], "deslumbrante"),
+            "¡Bolo Fiesta!": (sl.MODE, [], "deslumbrante"),       # Whisper, log del 27-10-2026
+            "pon el mono lectura": (sl.MODE, [], "lectura"),
             "pon la lámpara derecha en modo noche": (sl.MODE, [der], "noche"),
             "pon la luz en modo zumba": (sl.MODE, [], None),
         }
@@ -129,7 +143,10 @@ class LightsTest(unittest.TestCase):
             self.assertEqual((cmd.action, cmd.targets, cmd.value), (action, targets, value), text)
         for text in ("pon la canción luz de luna", "pon Luz Casal", "apaga la música", "sube el volumen",
                      "¿qué es la luz?", "pon modo avión", "prende la tele", "pon rojo", "modo zumba",
-                     "¿cómo funciona una lámpara?", "por la luz de la luna", "¿por qué la luz es amarilla?"):
+                     "¿cómo funciona una lámpara?", "por la luz de la luna", "¿por qué la luz es amarilla?",
+                     "el mono araña", "pon Moto Perpetuo", "buena luz para fotos", "buenas noches",
+                     "para la luz de la luna", "sobre la luz del sol", "hola luz cómo estás",
+                     "con la luz encendida no puedo dormir", "o la luz o la oscuridad"):
             self.assertIsNone(self.lights.parse(text), text)
         # Las de música siguen siendo de música.
         self.assertEqual(intents.detect("pon la canción luz de luna"), intents.MUSIC_PLAY)
