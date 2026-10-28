@@ -25,3 +25,6 @@ mcp==2.3.0
 # actual en el venv. El extra [default] incluye yt-dlp-ejs (retos JavaScript de YouTube, con Node).
 # Actualizar cuando YouTube cambie algo:  venv/bin/pip install -U "yt-dlp[default]"
 yt-dlp[default]>=2026.10.21
+
+# Lámparas de Smart Life (Tuya) por la red local (app/smart_lights.py, docs/luces.md)
+tinytuya==1.20.0

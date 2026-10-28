@@ -33,6 +33,7 @@ from .conversation_memory import ConversationMemory
 from .echo_cancel import ALSA_IN, ALSA_OUT, SINK as AEC_SINK, EchoCanceller, EchoCancelError, find_source
 from .music_genres import match_genre
 from .music_player import MpvBackend, MusicError, MusicPlayer, YouTubeSource
+from .smart_lights import LightError, SmartLights
 from .speech_to_text import MicHistory, NoiseTracker, STTError, UtteranceRecorder, WhisperTranscriber
 from .state_manager import State, StateManager
 from .text_to_speech import PiperTTS, TTSError, prepare_for_speech, split_sentences
@@ -87,6 +88,7 @@ class VimoController:
         self.camera: CameraManager | None = None
         self.video: VideoRecorder | None = None
         self.music: MusicPlayer | None = None
+        self.lights: SmartLights | None = None
         self.aec: EchoCanceller | None = None
         self._resume_music_after_turn = False
         self._last_music_title: str | None = None
@@ -115,7 +117,7 @@ class VimoController:
             self.components[name] = (False, msg)
             log.error("Componente %s no disponible: %s", name, msg, exc_info=not isinstance(
                 exc, (AudioUnavailable, WakeWordError, STTError, TTSError, ClaudeError, CameraError,
-                      EchoCancelError)))
+                      EchoCancelError, LightError)))
             return False
 
     def _warmup(self) -> None:
@@ -145,6 +147,7 @@ class VimoController:
         self._component("Claude Code", self._init_claude)
         self._component("cámara (IMX519)", self._init_camera)
         self._component("música (YouTube)", self._init_music)
+        self._component("luces (Smart Life)", self._init_lights)
         self.events.put(("components", dict(self.components)))
         log.info("Arranque completado en %.1f s: %s", time.monotonic() - t0,
                  {k: v[0] for k, v in self.components.items()})
@@ -301,6 +304,15 @@ class VimoController:
         self.music.on_error = lambda msg: self.events.put(("error", f"Música: {msg}"))
         self.music.stop()  # vacía restos de la caché de una ejecución anterior
         return versions
+
+    def _init_lights(self):
+        cfg = self.config.section("lights")
+        if not cfg["enabled"]:
+            raise LightError("desactivadas en config.json")
+        # Se crea aunque falte devices.json: así Vimo reconoce la orden y explica qué falta, y
+        # empieza a funcionar en cuanto tools/descubrir_luces.py lo genera (se relee solo).
+        self.lights = SmartLights(cfg, resolve_path(cfg["devices_file"]), resolve_path(cfg["modes_file"]))
+        return self.lights.summary()
 
     # ===================================================================================
     # Utilidades
@@ -489,6 +501,11 @@ class VimoController:
                 if text is None:
                     return
             self.events.put(("user_text", text))
+            light = self.lights.parse(text) if self.lights else None
+            if light:
+                log.info("Orden de luces: %s", light)
+                self._speak(self.lights.run(light))
+                return
             intent = intents.parse(text)
             if intent:
                 self._run_intent(intent)

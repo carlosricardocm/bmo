@@ -200,6 +200,20 @@ DEFAULTS: dict[str, Any] = {
         "ytdlp_cpu_cores": [3],
         "ytdlp_nice": 10,
     },
+    "lights": {
+        # Lámparas de Smart Life (Tuya) por la red local con tinytuya (docs/luces.md).
+        "enabled": True,
+        "devices_file": "data/lights/devices.json",   # tools/descubrir_luces.py
+        "modes_file": "data/lights/modes.json",       # tools/guardar_modo_luz.py
+        "timeout_seconds": 2.0,
+        "brightness_step": 20,                        # «sube / baja la luz», en puntos de porcentaje
+        "lamps": [
+            {"name": "lampara_cuarto_izq", "label": "la lámpara izquierda",
+             "aliases": ["izquierda", "izquierdo", "izq"]},
+            {"name": "lampara_cuarto_der", "label": "la lámpara derecha",
+             "aliases": ["derecha", "derecho", "der"]},
+        ],
+    },
     "memory": {
         "enabled": True,
         "path": "data/conversation_memory.json",
@@ -269,6 +283,8 @@ RULES: dict[str, tuple] = {
     "music.max_duration_seconds": (_NUM, 60, 36000),
     "music.mix_size": ((int,), 5, 100),
     "music.download_timeout_seconds": (_NUM, 10, 600),
+    "lights.timeout_seconds": (_NUM, 0.5, 10.0),
+    "lights.brightness_step": ((int,), 5, 50),
 }
 CHOICES: dict[str, tuple] = {
     "wake_word.engine": ("livekit",),

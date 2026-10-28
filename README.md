@@ -80,6 +80,7 @@ Las caras `faces/idle_*` se generan con `tools/generar_caras_reposo.py` a partir
 | «Detén la grabación», «deja de grabar» | Detiene, genera y verifica el MP4 |
 | «Nueva conversación», «olvida todo» | Reinicia el contexto |
 | «Pon *De música ligera*», «ponme algo de Zoé» | Música de YouTube y después canciones similares ([docs/musica.md](docs/musica.md)) |
+| «Prende las luces», «apaga la lámpara derecha», «luz al 50», «modo lectura» | Lámparas de Smart Life por la red local ([docs/luces.md](docs/luces.md)) |
 | «Reproduce rock», «reproduce techno», «pon house», «pon rock de los 80» | Música por **género**, sin parar hasta que digas «para» |
 | «Siguiente canción», «sube / baja el volumen», «pausa», «continúa» | Control de la música |
 | «Para la música», «para», «basta» | Detiene la música |
@@ -135,6 +136,7 @@ bmoclaude/
 | [docs/piper.md](docs/piper.md) | Piper TTS: voces, parámetros |
 | [docs/duckduckgo.md](docs/duckduckgo.md) | Búsqueda web y servidor MCP |
 | [docs/camara_video.md](docs/camara_video.md) | Fotos y grabación de vídeo |
+| [docs/luces.md](docs/luces.md) | Lámparas de Smart Life (Tuya): configuración y órdenes |
 | [docs/musica.md](docs/musica.md) | Reproductor de música (YouTube, canciones similares, volumen) |
 | [docs/eco.md](docs/eco.md) | Cancelación de eco: oír «Hey Vimo» con música sonando |
 | [docs/dependencias.md](docs/dependencias.md) | Tabla de dependencias y versiones |
