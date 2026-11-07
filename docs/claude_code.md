@@ -101,3 +101,19 @@ No está implementado. Vimo nunca afirma «ver» nada, y las reglas del sistema 
 a Claude. Para añadirlo de forma explícita se podría permitir a Claude la herramienta `Read`
 limitada a la ruta de una foto recién tomada (`--tools Read --allowedTools "Read(<ruta>)"`). Esa
 opción no se ha verificado.
+
+## Órdenes ejecutadas por Claude (`claude.allow_commands`)
+
+Las órdenes bien transcritas las ejecuta Vimo al instante sin pasar por Claude. Si Whisper deforma
+una orden («¡Juan a la luz!») y el reconocedor local no la entiende, la frase llega a Claude, que
+puede llamar a la herramienta MCP `ejecutar_orden` con la orden corregida («apaga la luz»).
+
+- `app/mcp_server.py` expone `ejecutar_orden`; la envía a Vimo por el socket Unix
+  `data/vimo_control.sock` (permisos 600, `app/control_server.py`).
+- Vimo la ejecuta con los mismos reconocedores que la voz (`VimoController.run_command_from_claude`)
+  y devuelve a Claude lo que habría dicho; Claude confirma con su respuesta (no se habla dos veces).
+- Solo luces, música y volumen. La cámara y «nueva conversación» se rechazan: solo las da el
+  usuario directamente.
+- Prueba real (28-10-2026): «¡Juan a la luz!» → `apaga la luz` en 5,2 s; las preguntas normales no
+  usan la herramienta.
+- Para desactivarlo: `"claude": {"allow_commands": false}` en `config.json`.

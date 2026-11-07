@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.claude_code_client import (WEB_SEARCH_TOOL, ClaudeCodeClient, ClaudeError, StreamParser,  # noqa: E402
+from app.claude_code_client import (COMMAND_TOOL, WEB_SEARCH_TOOL, ClaudeCodeClient, ClaudeError, StreamParser,  # noqa: E402
                                     classify_error, extract_sources)
 
 FAKE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake_claude.py")
@@ -145,6 +145,24 @@ class ClaudeClientTest(unittest.TestCase):
         self.assertNotIn("--mcp-config", argv)
         self.assertNotIn("--allowedTools", argv)
         self.assertIn("--strict-mcp-config", argv)
+
+
+    def test_commands_tool_and_rules(self):
+        c = self.client(allow_commands=True)
+        argv = c.build_command(resume=False)
+        self.assertEqual(argv[argv.index("--allowedTools") + 1], f"{WEB_SEARCH_TOOL},{COMMAND_TOOL}")
+        self.assertIn("ejecutar_orden", argv[argv.index("--system-prompt") + 1])
+        c = self.client(allow_commands=False, enable_web_search=False)
+        argv = c.build_command(resume=False)
+        self.assertNotIn("--allowedTools", argv)
+        self.assertNotIn("ejecutar_orden", argv[argv.index("--system-prompt") + 1])
+
+    def test_command_tool_reports_progress(self):
+        events = []
+        p = StreamParser(lambda kind, data: events.append((kind, data)))
+        p.feed(json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "t1", "name": COMMAND_TOOL, "input": {"orden": "apaga la luz"}}]}}))
+        self.assertIn(("command", {"orden": "apaga la luz"}), events)
 
 
 class ParsingTest(unittest.TestCase):

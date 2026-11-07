@@ -117,6 +117,7 @@ class LightsTest(unittest.TestCase):
             "por favor prende la luz": (sl.ON, [], None),
             "cambia la lámpara izquierda a azul": (sl.COLOUR, [izq], "azul"),
             "luz cálida": (sl.TEMP, [], 0),
+            "Pon la luz neutral.": (sl.TEMP, [], 50),
             "Pon la luz calidad.": (sl.TEMP, [], 0),          # Whisper, log del 25-10-2026
             "¡Polo luz calidad!": (sl.TEMP, [], 0),
             "Buena luz, calidad.": (sl.TEMP, [], 0),          # Whisper, log del 27-10-2026
@@ -191,6 +192,34 @@ class LightsTest(unittest.TestCase):
         self.lights._devices.clear()
         self.assertIn("No pude conectar con las dos lámparas", self.say("prende las luces"))
 
+    def test_flaky_lamp_is_retried_once(self):
+        calls = {"n": 0}
+        orig = sl.SmartLights._apply
+
+        def flaky(this, lamp, cmd):
+            if lamp.name == "lampara_cuarto_izq" and calls["n"] == 0:
+                calls["n"] += 1
+                raise sl.LightError("Invalid JSON Response from Device")
+            return orig(this, lamp, cmd)
+        sl.SmartLights._apply = flaky
+        self.addCleanup(setattr, sl.SmartLights, "_apply", orig)
+        self.assertEqual(self.say("pon la luz rosa"), "Listo, luz rosa.")
+        self.assertEqual(self.bulbs["lampara_cuarto_izq"].dps["21"], "colour")
+
+    def test_lamp_failing_twice_still_succeeds(self):
+        calls = {"n": 0}
+        orig = sl.SmartLights._apply
+
+        def flaky(this, lamp, cmd):
+            if lamp.name == "lampara_cuarto_izq" and calls["n"] < 2:
+                calls["n"] += 1
+                raise sl.LightError("Invalid JSON Response from Device")
+            return orig(this, lamp, cmd)
+        sl.SmartLights._apply = flaky
+        self.addCleanup(setattr, sl.SmartLights, "_apply", orig)
+        self.lights.RETRY_DELAYS = (0.01, 0.01)
+        self.assertEqual(self.say("pon la luz neutra"), "Listo, luz neutra.")
+
     def test_missing_devices_file_explains(self):
         os.remove(self.devices)
         os.utime(self.tmp.name)
@@ -233,6 +262,36 @@ class ControllerLightsTest(unittest.TestCase):
         self.assertEqual(said, ["Listo, prendí las dos lámparas."])
         self.assertEqual(self.c.claude.prompts, [])
         self.assertTrue(all(b.dps["20"] for b in self.bulbs))
+
+
+class ClaudeCommandsTest(ControllerLightsTest):
+    """Órdenes que Claude deduce de una transcripción deformada (herramienta ejecutar_orden)."""
+
+    def test_light_order_runs_and_reply_is_not_spoken(self):
+        spoken = []
+        self.c.player.play_stream = lambda *a, **k: spoken.append(a)
+        r = self.c.run_command_from_claude("apaga la luz")
+        self.assertEqual(r, {"ok": True, "resultado": "Listo, apagué las dos lámparas."})
+        self.assertTrue(all(b.dps["20"] is False for b in self.bulbs))
+        self.assertEqual(spoken, [])
+
+    def test_camera_and_unknown_are_refused(self):
+        self.assertFalse(self.c.run_command_from_claude("toma una foto")["ok"])
+        self.assertFalse(self.c.run_command_from_claude("empecemos una nueva conversación")["ok"])
+        r = self.c.run_command_from_claude("haz algo raro")
+        self.assertFalse(r["ok"])
+        self.assertIn("No reconozco", r["resultado"])
+
+    def test_control_socket_roundtrip(self):
+        from app.control_server import ControlServer, send
+        path = os.path.join(self.tmp.name, "ctl.sock")
+        srv = ControlServer(path, self.c.run_command_from_claude)
+        srv.start()
+        self.addCleanup(srv.stop)
+        self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600")
+        r = send(path, "pon la luz roja", timeout=5)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["resultado"], "Listo, luz roja.")
 
 
 if __name__ == "__main__":

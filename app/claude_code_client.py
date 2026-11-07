@@ -5,7 +5,7 @@ Verificado con Claude Code 2.1.307. Cada turno ejecuta:
     claude -p --output-format stream-json --verbose
            --tools ""                          # sin herramientas integradas (Bash, Edit, Read…)
            --mcp-config <data/mcp_config.json> --strict-mcp-config
-           --allowedTools mcp__vimo__web_search
+           --allowedTools mcp__vimo__web_search,mcp__vimo__ejecutar_orden
            --permission-mode dontAsk           # lo no permitido se deniega, nunca se pregunta
            --setting-sources "" --disable-slash-commands
            --system-prompt <personalidad y reglas de Vimo>
@@ -38,6 +38,18 @@ from typing import Callable
 log = logging.getLogger(__name__)
 
 WEB_SEARCH_TOOL = "mcp__vimo__web_search"
+COMMAND_TOOL = "mcp__vimo__ejecutar_orden"
+
+COMMAND_RULES = """
+Órdenes de luces, música y volumen:
+- Lo que escribe el usuario viene de un reconocedor de voz y a veces llega deformado. Las órdenes
+  claras ya las ejecuta Vimo antes de llegar a ti; si te llega algo que parece una orden de luces,
+  música o volumen mal transcrita («Juan a la luz» = «apaga la luz», «Baca colomer» = «baja el
+  volumen», «y canciones están» = «qué canción es esta»), llama a ejecutar_orden con la orden
+  corregida y luego confirma en una frase corta según el resultado.
+- Solo si la intención es razonablemente clara; si dudas, pregunta qué quería. Nunca ejecutes
+  órdenes que el usuario no haya pedido.
+"""
 
 VOICE_RULES = """
 Reglas de respuesta (tus respuestas se leen en voz alta con un sintetizador):
@@ -184,6 +196,8 @@ class StreamParser:
                     continue
                 if block.get("type") == "tool_use":
                     self._tool_names[block.get("id", "")] = block.get("name", "")
+                    if block.get("name") == COMMAND_TOOL:
+                        self._progress("command", block.get("input") or {})
                     if block.get("name") == WEB_SEARCH_TOOL:
                         query = str((block.get("input") or {}).get("query", ""))
                         self.searches.append(query)
@@ -270,15 +284,25 @@ class ClaudeCodeClient:
 
     # Construcción del comando ---------------------------------------------------------------
     def system_prompt(self) -> str:
-        return f"{self.personality.strip()}\n\n{VOICE_RULES}"
+        rules = VOICE_RULES + (COMMAND_RULES if self.cfg.get("allow_commands") else "")
+        return f"{self.personality.strip()}\n\n{rules}"
+
+    def allowed_tools(self) -> list[str]:
+        tools = []
+        if self.cfg.get("enable_web_search", True):
+            tools.append(WEB_SEARCH_TOOL)
+        if self.cfg.get("allow_commands"):
+            tools.append(COMMAND_TOOL)
+        return tools
 
     def build_command(self, resume: bool) -> list[str]:
         cmd = [self.executable, "-p", "--output-format", "stream-json", "--verbose",
                "--tools", "", "--permission-mode", "dontAsk", "--setting-sources", "",
                "--disable-slash-commands", "--system-prompt", self.system_prompt()]
-        if self.cfg.get("enable_web_search", True):
+        tools = self.allowed_tools()
+        if tools:
             cmd += ["--mcp-config", self.mcp_config_path, "--strict-mcp-config",
-                    "--allowedTools", WEB_SEARCH_TOOL]
+                    "--allowedTools", ",".join(tools)]
         else:
             cmd += ["--strict-mcp-config"]
         cmd += ["--resume", self.session_id] if resume else ["--session-id", self.session_id]

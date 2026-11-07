@@ -107,7 +107,7 @@ DEFAULTS: dict[str, Any] = {
         # Vocabulario que se le da a Whisper antes de cada consulta. Con tus frases grabadas
         # (tools/evaluar_whisper.py, 28-10-2026) bajó el error de palabras del 36 % al 24 % por ~0,9 s
         # más. Vacío = sin vocabulario.
-        "prompt": ("Órdenes para Vimo: prende, apaga, pon la luz cálida, fría, blanca, roja, azul; lámpara "
+        "prompt": ("Órdenes para Vimo: prende, apaga, pon la luz cálida, neutra, fría, blanca, roja, azul; lámpara "
                    "izquierda y derecha; brillo; modo fiesta, lectura, noche, relax; reproduce, pon música de, "
                    "pausa, para la música, siguiente canción; sube y baja el volumen; toma una foto."),
         "use_server": True,
@@ -121,6 +121,9 @@ DEFAULTS: dict[str, Any] = {
         "session_max_turns": 40,
         "max_budget_usd": None,
         "enable_web_search": True,
+        # Claude puede ejecutar órdenes de luces, música y volumen (herramienta ejecutar_orden) cuando
+        # la transcripción llega deformada y el reconocedor local no la entiende. Nunca la cámara.
+        "allow_commands": True,
         "extra_args": [],
     },
     "web_search": {
@@ -212,7 +215,7 @@ DEFAULTS: dict[str, Any] = {
         "enabled": True,
         "devices_file": "data/lights/devices.json",   # tools/descubrir_luces.py
         "modes_file": "data/lights/modes.json",       # tools/guardar_modo_luz.py
-        "timeout_seconds": 2.0,
+        "timeout_seconds": 3.0,
         "brightness_step": 20,                        # «sube / baja la luz», en puntos de porcentaje
         "lamps": [
             {"name": "lampara_cuarto_izq", "label": "la lámpara izquierda",

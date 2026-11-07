@@ -4,9 +4,10 @@ Claude Code lo lanza como subproceso gracias a la configuración que genera
 claude_code_client.py (--mcp-config ... --strict-mcp-config). Herramientas expuestas:
 
     web_search(query, kind="web"|"news", max_results=1..10, timelimit=None|"d"|"w"|"m"|"y")
+    ejecutar_orden(orden)   luces, música y volumen, por el socket de Vimo (control_server.py)
 
-No se exponen herramientas de cámara, archivos ni comandos: la cámara la controla Vimo
-localmente con órdenes explícitas del usuario (ver intents.py).
+No se exponen herramientas de cámara, archivos ni comandos del sistema: la cámara solo responde
+a órdenes explícitas del usuario reconocidas por Vimo (ver intents.py).
 
 Prueba manual:  venv/bin/python app/mcp_server.py   (habla JSON-RPC por stdin/stdout)
 """
@@ -22,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from mcp.server.mcpserver import MCPServer  # noqa: E402
 
 from app.config_manager import PROJECT_ROOT, ConfigManager  # noqa: E402
+from app.control_server import send as send_control  # noqa: E402
 from app.web_search import SearchError, WebSearch, results_payload  # noqa: E402
 
 # stdout está reservado al protocolo MCP: los registros van a stderr.
@@ -59,6 +61,31 @@ def web_search(query: str, kind: str = "web", max_results: int = 5, timelimit: s
     if not results:
         payload["note"] = "Sin resultados. Dilo al usuario en lugar de inventar información."
     return json.dumps(payload, ensure_ascii=False)
+
+
+CONTROL_SOCKET = os.environ.get("VIMO_CONTROL_SOCKET") or os.path.join(PROJECT_ROOT, "data", "vimo_control.sock")
+
+
+@server.tool(
+    description=(
+        "Ejecuta en Vimo una orden de luces, música o volumen. La consulta del usuario viene de un "
+        "reconocedor de voz y puede llegar deformada («Juan a la luz», «Baca colomer»): si el "
+        "usuario claramente quiere una de estas acciones, pásala aquí corregida, en español "
+        "sencillo e imperativo, por ejemplo: «apaga la luz», «prende la lámpara izquierda», "
+        "«pon la luz roja», «pon la luz cálida», «pon la luz al 40», «sube la luz», «modo fiesta», "
+        "«modo lectura», «reproduce Soda Stereo», «pon música de rock», «para la música», "
+        "«pausa la música», «continúa la música», «siguiente canción», «qué canción es esta», "
+        "«sube el volumen», «baja el volumen», «pon el volumen al 60». Una orden por llamada. "
+        "Devuelve JSON con ok y resultado (lo que Vimo hizo o por qué no pudo). No sirve para la "
+        "cámara ni para nada que el usuario no haya pedido."
+    )
+)
+def ejecutar_orden(orden: str) -> str:
+    try:
+        reply = send_control(CONTROL_SOCKET, orden)
+    except OSError as exc:
+        reply = {"ok": False, "resultado": f"Vimo no está disponible para ejecutar órdenes ({exc})."}
+    return json.dumps(reply, ensure_ascii=False)
 
 
 if __name__ == "__main__":

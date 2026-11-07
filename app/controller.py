@@ -29,6 +29,7 @@ from .audio_manager import (AudioPlayer, AudioUnavailable, MicrophoneStream, Sou
 from .camera_manager import CameraError, CameraManager
 from .claude_code_client import ClaudeCodeClient, ClaudeError
 from .config_manager import PROJECT_ROOT, ConfigManager, resolve_path
+from .control_server import ControlServer
 from .conversation_memory import ConversationMemory
 from .echo_cancel import ALSA_IN, ALSA_OUT, SINK as AEC_SINK, EchoCanceller, EchoCancelError, find_source
 from .music_genres import match_genre
@@ -53,6 +54,8 @@ def _has_device(name: str, kind: str) -> bool:
         return False
 # Tras mostrar un error, Vimo vuelve solo al reposo pasado este tiempo (si nada lo ha cambiado).
 ERROR_RECOVERY_SECONDS = 6.0
+
+CONTROL_SOCKET = os.path.join(PROJECT_ROOT, "data", "vimo_control.sock")
 
 MUSIC_INTENTS = {intents.MUSIC_PLAY, intents.MUSIC_STOP, intents.MUSIC_PAUSE, intents.MUSIC_RESUME,
                  intents.MUSIC_NEXT, intents.MUSIC_NOW, intents.VOLUME_UP, intents.VOLUME_DOWN,
@@ -89,6 +92,10 @@ class VimoController:
         self.video: VideoRecorder | None = None
         self.music: MusicPlayer | None = None
         self.lights: SmartLights | None = None
+        self.control: ControlServer | None = None
+        # Mientras se ejecuta una orden pedida por Claude, lo que Vimo diría se guarda aquí (por hilo)
+        # y se devuelve a Claude como resultado, en lugar de hablar dos veces.
+        self._tls = threading.local()
         self.aec: EchoCanceller | None = None
         self._resume_music_after_turn = False
         self._last_music_title: str | None = None
@@ -268,6 +275,9 @@ class VimoController:
         self.claude.on_session_change = self.memory.set_session
         self.claude.write_mcp_config()
         info = self.claude.check()
+        if c["allow_commands"] and self.control is None:
+            self.control = ControlServer(CONTROL_SOCKET, self.run_command_from_claude)
+            self.control.start()
         return info.get("version", "")
 
     def _init_camera(self):
@@ -599,6 +609,8 @@ class VimoController:
         def progress(kind: str, data: dict) -> None:
             if kind == "search":
                 self.events.put(("progress", f"Buscando en DuckDuckGo: {data.get('query', '')}"))
+            elif kind == "command":
+                self.events.put(("progress", f"Ejecutando: {data.get('orden', '')}"))
 
         t = time.monotonic()
         try:
@@ -624,6 +636,10 @@ class VimoController:
         return reply
 
     def _speak(self, text: str, timings: dict | None = None) -> None:
+        said = getattr(self._tls, "said", None)
+        if said is not None:  # orden pedida por Claude: el texto vuelve a Claude, no se habla
+            said.append(text)
+            return
         if not (self.tts and self.tts.voice and self.player):
             # Sin voz: la respuesta ya está en pantalla.
             self.events.put(("status", "Respuesta mostrada en pantalla (la voz no está disponible)"))
@@ -653,6 +669,38 @@ class VimoController:
             self.events.put(("status", "Respuesta interrumpida"))
         if self.state.state == State.SPEAKING:
             self.state.set(State.IDLE, "fin de la respuesta hablada")
+
+    # ===================================================================================
+    # Órdenes pedidas por Claude (herramienta ejecutar_orden, por control_server.py)
+    # ===================================================================================
+    def run_command_from_claude(self, text: str) -> dict:
+        """Ejecuta una orden de luces, música o volumen que Claude ha deducido de una transcripción
+        deformada. Usa los mismos reconocedores que la voz; la cámara y el reinicio de la
+        conversación quedan fuera (solo el usuario directamente)."""
+        light = self.lights.parse(text) if self.lights else None
+        intent = None if light else intents.parse(text)
+        if intent and intent.name not in MUSIC_INTENTS:
+            log.info("Orden de Claude rechazada (%s): %s", intent.name, text)
+            return {"ok": False, "resultado": "Esa orden solo la puede dar el usuario directamente."}
+        if not light and not intent:
+            log.info("Orden de Claude no reconocida: %s", text)
+            return {"ok": False, "resultado": "No reconozco esa orden. Usa una forma sencilla, como "
+                                              "«apaga la luz», «pon la luz roja», «modo fiesta», "
+                                              "«reproduce Soda Stereo» o «baja el volumen»."}
+        log.info("Orden de Claude: %s → %s", text, light or intent)
+        said: list[str] = []
+        self._tls.said = said
+        try:
+            if light:
+                said.append(self.lights.run(light))
+            else:
+                self._run_intent(intent)
+        except Exception as exc:
+            log.exception("Error ejecutando la orden de Claude")
+            return {"ok": False, "resultado": f"Error al ejecutar la orden: {exc}"}
+        finally:
+            self._tls.said = None
+        return {"ok": True, "resultado": " ".join(said) or "Hecho."}
 
     # ===================================================================================
     # Órdenes locales: cámara y conversación
@@ -937,6 +985,8 @@ class VimoController:
             self.video.shutdown()
         if self.camera:
             self.camera.close()
+        if self.control:
+            self.control.stop()
         if self.claude:
             self.claude.shutdown()
         if self.music:

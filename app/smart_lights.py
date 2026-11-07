@@ -19,6 +19,7 @@ import logging
 import os
 import re
 import threading
+import time
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
@@ -90,7 +91,7 @@ _VERB_SET = {"pon", "ponme", "ponle", "poner", "ponla", "ponlas", "cambia", "cam
              "buena", "buenas", "bona",  # «Buena luz, calidad.» = «pon la luz cálida» (27-10-2026)
              # Evaluación con tu voz (28-10-2026): «Hola, luz fría», «con la luz al 50%», «o la luz
              # fría», «Pondra luz blanca».
-             "hola", "con", "o", "pondra", "pondran"}
+             "hola", "con", "o", "pondra", "pondran", "ponte"}  # «Ponte la luz al 30%» (28-10-2026)
 # Verbos que son también palabras corrientes («para la luz de la luna», «sobre la luz del sol»):
 # solo cuentan si no sobra nada más en la frase.
 _VERB_STRICT = {"para", "sobre"}
@@ -234,7 +235,7 @@ class LightParser:
             return LightCommand(TEMP, targets, 0)
         if re.search(r"\b(?:fria|frio|fresca)\b", tail):
             return LightCommand(TEMP, targets, 100)
-        if re.search(r"\bneutr[ao]\b", tail):
+        if re.search(r"\bneutr(?:a|o|al)\b", tail):  # «Pon la luz neutral» (28-10-2026)
             return LightCommand(TEMP, targets, 50)
         if re.search(r"\bblanc[oa]s?\b", tail):
             return LightCommand(WHITE, targets)
@@ -349,6 +350,25 @@ class SmartLights:
             return self._check(d.colour_hsv(state=state))[2] * 100
         return d.get_brightness_percentage(state=state)
 
+    RETRY_DELAYS = (0.5, 1.5)
+
+    def _apply_retry(self, lamp: Lamp, cmd: LightCommand) -> None:
+        """Las lámparas responden a veces tarde o a medias («Invalid JSON Response»; sobre todo
+        lampara_cuarto_izq, 28-10-2026). Además solo admiten una conexión local a la vez: si la app
+        Smart Life del móvil está conectada, la de Vimo se corta. Se reconecta y se reintenta hasta
+        dos veces más. «Sube/baja la luz» no se repite: si el primer intento sí llegó, el brillo
+        cambiaría el doble."""
+        for delay in (*self.RETRY_DELAYS, None):
+            try:
+                self._apply(lamp, cmd)
+                return
+            except Exception as exc:
+                if delay is None or cmd.action in (BRIGHTER, DIMMER):
+                    raise
+                log.info("Luz %s: %s; reintento en %.1f s", lamp.name, exc, delay)
+                self._devices.pop(lamp.name, None)
+                time.sleep(delay)
+
     def _apply(self, lamp: Lamp, cmd: LightCommand) -> None:
         with self._locks[lamp.name]:
             d = self._device(lamp)
@@ -402,8 +422,8 @@ class SmartLights:
             return f"No conozco el modo {cmd.raw_mode}. Tengo: {', '.join(known)}."
         failed: list[tuple[Lamp, str]] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(lamps), thread_name_prefix="light") as pool:
-            futures = {pool.submit(self._apply, lamp, cmd): lamp for lamp in lamps}
-            done, pending = concurrent.futures.wait(futures, timeout=self.timeout * 4 + 2)
+            futures = {pool.submit(self._apply_retry, lamp, cmd): lamp for lamp in lamps}
+            done, pending = concurrent.futures.wait(futures, timeout=(self.timeout * 4 + 2) * 3 + 2)
             for fut in pending:
                 failed.append((futures[fut], "no respondió a tiempo"))
             for fut in done:
@@ -439,7 +459,8 @@ class SmartLights:
         if cmd.action == DIMMER:
             return "Bajé la luz."
         if cmd.action == COLOUR:
-            return f"Listo, luz {cmd.value}."
+            feminine = {"rojo": "roja", "amarillo": "amarilla", "morado": "morada"}
+            return f"Listo, luz {feminine.get(cmd.value, cmd.value)}."
         if cmd.action == WHITE:
             return "Listo, luz blanca."
         if cmd.action == TEMP:
